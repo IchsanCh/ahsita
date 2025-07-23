@@ -64,7 +64,7 @@ def send_wa_to_matching_pegawai_if_needed(conn, cursor, user, tahapan, no_permoh
 
     cursor.execute("SELECT kirim_pegawai, status FROM pemohons WHERE id = %s", (pemohon_id,))
     row = cursor.fetchone()
-    if not row or row.get('kirim_pegawai') != 'belum' or (row.get('status') or '').lower() != 'proses':
+    if not row or str(row['kirim_pegawai']).lower() != 'belum' or str(row['status']).lower() != 'proses':
         print(f"Pemohon ID {pemohon_id} tidak perlu dikirimi WA pegawai (status/kirim_pegawai)")
         return
 
@@ -139,8 +139,8 @@ def process_user(conn, user, cursor):
                 cursor.execute("""
                     INSERT INTO pemohons
                     (external_id, user_id, nama, nomor_hp, no_permohonan, nama_izin, tahapan, status, payload_hash,
-                     created_at, last_notified_tahapan, notified_at, kirim_pegawai)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'belum')
+                     tgl_pengajuan, last_notified_tahapan, notified_at, kirim_pegawai, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'belum', NOW())
                 """, (ext_id, user_id, nama, nomor_hp, no_permohonan, nama_izin, tahapan, status, hash_val,
                       created_at, tahapan, datetime.now()))
                 new_id = cursor.lastrowid
@@ -164,7 +164,7 @@ def process_user(conn, user, cursor):
                         UPDATE pemohons
                         SET nama=%s, nomor_hp=%s, no_permohonan=%s, nama_izin=%s,
                             tahapan=%s, status=%s, payload_hash=%s,
-                            created_at=%s, last_notified_tahapan=%s,
+                            tgl_pengajuan=%s, last_notified_tahapan=%s,
                             notified_at=%s
                         WHERE external_id=%s
                     """, (nama, nomor_hp, no_permohonan, nama_izin, tahapan, status,
@@ -174,7 +174,7 @@ def process_user(conn, user, cursor):
                     cursor.execute("""
                         UPDATE pemohons 
                         SET nama=%s, nomor_hp=%s, no_permohonan=%s, nama_izin=%s,
-                            tahapan=%s, status=%s, payload_hash=%s, created_at=%s
+                            tahapan=%s, status=%s, payload_hash=%s, tgl_pengajuan=%s
                         WHERE external_id=%s
                     """, (nama, nomor_hp, no_permohonan, nama_izin, tahapan, status, hash_val, created_at, ext_id))
 
@@ -183,7 +183,7 @@ def process_user(conn, user, cursor):
                 pemohon_id = result['id']
                 cursor.execute("SELECT kirim_pegawai, status FROM pemohons WHERE id = %s", (pemohon_id,))
                 row = cursor.fetchone()
-                if row and row['kirim_pegawai'] == 'belum' and row['status'].lower() == 'proses':
+                if row and row['kirim_pegawai'].lower() == 'belum' and row['status'].lower() == 'proses':
                     send_wa_to_matching_pegawai_if_needed(conn, cursor, user, tahapan, no_permohonan, pemohon_id)
 
     except Exception as e:

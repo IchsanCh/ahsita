@@ -18,7 +18,7 @@ def delete_old_pemohon():
 
         cursor.execute("""
             DELETE FROM pemohons 
-            WHERE updated_at < %s
+            WHERE created_at < %s
         """, (batas_waktu,))
         jumlah = cursor.rowcount
 
