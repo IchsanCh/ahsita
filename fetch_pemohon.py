@@ -64,7 +64,7 @@ def send_wa_to_matching_pegawai_if_needed(conn, cursor, user, tahapan, no_permoh
 
     cursor.execute("SELECT kirim_pegawai, status FROM pemohons WHERE id = %s", (pemohon_id,))
     row = cursor.fetchone()
-    if not row or row['kirim_pegawai'] != 'belum' or row['status'] != 'proses':
+    if not row or row.get('kirim_pegawai') != 'belum' or (row.get('status') or '').lower() != 'proses':
         print(f"Pemohon ID {pemohon_id} tidak perlu dikirimi WA pegawai (status/kirim_pegawai)")
         return
 
@@ -183,7 +183,7 @@ def process_user(conn, user, cursor):
                 pemohon_id = result['id']
                 cursor.execute("SELECT kirim_pegawai, status FROM pemohons WHERE id = %s", (pemohon_id,))
                 row = cursor.fetchone()
-                if row and row['kirim_pegawai'] == 'belum' and row['status'] == 'proses':
+                if row and row['kirim_pegawai'] == 'belum' and row['status'].lower() == 'proses':
                     send_wa_to_matching_pegawai_if_needed(conn, cursor, user, tahapan, no_permohonan, pemohon_id)
 
     except Exception as e:
