@@ -27,8 +27,11 @@ def is_valid_number(nomor_hp):
     nomor = nomor_hp.strip().replace('+', '').replace(' ', '').replace('-', '')
     return nomor.isdigit() and (nomor.startswith("08") or nomor.startswith("628")) and 10 <= len(nomor) <= 15
 
-def send_whatsapp_and_log(cursor, pemohon_id, nama, nomor_hp, nama_izin, tahapan, no_permohonan, token, user_id):
-    message = f"Halo {nama}, permohonan {no_permohonan} untuk {nama_izin} kini berada pada tahap: *{tahapan}*."
+def send_whatsapp_and_log(cursor, pemohon_id, nama, nomor_hp, nama_izin, tahapan, no_permohonan, token, user_id, username):
+    message = f"""Hai Saudara/Saudari {nama}, dokumen permohonan perizinan {nama_izin} dengan Nomor Permohonan : {no_permohonan} saat ini sudah pada tahap {tahapan}.
+
+Pesan ini dikirim secara otomatis oleh Sitaku | sitaku.lotusaja.com
+{username}"""
 
     if not is_valid_number(nomor_hp):
         print(f"Nomor tidak valid: {nomor_hp}")
@@ -58,7 +61,7 @@ def send_whatsapp_and_log(cursor, pemohon_id, nama, nomor_hp, nama_izin, tahapan
     """, (pemohon_id, user_id, message, status))
     time.sleep(0.25)
 
-def send_wa_to_matching_pegawai_if_needed(conn, cursor, user, tahapan, no_permohonan=None, pemohon_id=None):
+def send_wa_to_matching_pegawai_if_needed(conn, cursor, user, tahapan, no_permohonan=None, pemohon_id=None, nama_izin=None, created_at=None, username=None):
     if not pemohon_id:
         return
 
@@ -74,7 +77,17 @@ def send_wa_to_matching_pegawai_if_needed(conn, cursor, user, tahapan, no_permoh
 
         nama = pegawai.get("nama")
         nomor_hp = pegawai.get("no_hp")
-        message = f"Halo {nama}, terdapat permohonan *{no_permohonan}* yang berada di tahap *{tahapan}*."
+        message = f"""Notifikasi Permohonan {tahapan}
+Nama: {nama}
+Perihal: {nama_izin}
+Nomor: {no_permohonan}
+Tgl. Permohonan: {created_at}
+
+Silakan login ke website sicantik.go.id untuk {tahapan.lower()}.
+
+Pesan ini dikirim secara otomatis oleh Sitaku | sitaku.lotusaja.com
+{username}"""
+
 
         if is_valid_number(nomor_hp):
             try:
@@ -101,7 +114,8 @@ def process_user(conn, user, cursor):
     api_url = user.get("api_url")
     token = user.get("fonnte_token")
     user_id = int(user.get("id"))
-
+    username = user.get("username")
+    
     if not api_url or not token:
         print(f"Skip user ID {user.get('id')} karena data tidak lengkap.")
         return
@@ -128,7 +142,16 @@ def process_user(conn, user, cursor):
             nama_izin = item.get("jenis_izin")
             tahapan = item.get("nama_proses")
             status = item.get("status")
-            created_at = item.get("tgl_pengajuan")
+            created_at_raw = item.get("tgl_pengajuan")  # contoh: "2025-07-25T09:00:00+00:00"
+            created_at = None
+
+            if created_at_raw:
+                try:
+                    dt_obj = datetime.fromisoformat(created_at_raw)
+                    created_at = dt_obj.strftime("%Y-%m-%d %H:%M:%S")  # aman buat MySQL datetime
+                except Exception as e:
+                    print(f"Gagal parsing tgl_pengajuan: {e}")
+                    created_at = None
             hash_val = compute_hash(item)
 
             cursor.execute("SELECT id, tahapan, payload_hash, last_notified_tahapan, nomor_hp FROM pemohons WHERE external_id = %s", (ext_id,))
@@ -144,8 +167,8 @@ def process_user(conn, user, cursor):
                 """, (ext_id, user_id, nama, nomor_hp, no_permohonan, nama_izin, tahapan, status, hash_val,
                       created_at, tahapan, datetime.now()))
                 new_id = cursor.lastrowid
-                send_whatsapp_and_log(cursor, new_id, nama, nomor_hp, nama_izin, tahapan, no_permohonan, token, user_id)
-                send_wa_to_matching_pegawai_if_needed(conn, cursor, user, tahapan, no_permohonan, new_id)
+                send_whatsapp_and_log(cursor, new_id, nama, nomor_hp, nama_izin, tahapan, no_permohonan, token, user_id, username)
+                send_wa_to_matching_pegawai_if_needed(conn, cursor, user, tahapan, no_permohonan, new_id, nama_izin, created_at, username)
 
             elif result['payload_hash'] != hash_val:
                 old_tahapan = result['tahapan']
@@ -153,12 +176,11 @@ def process_user(conn, user, cursor):
                 last_notified = result['last_notified_tahapan']
 
                 if tahapan != last_notified or nomor_hp != result.get('nomor_hp'):
-                    print(f"Tahapan berubah: ID {ext_id} {old_tahapan} → {tahapan}")
                     cursor.execute("UPDATE pemohons SET kirim_pegawai = 'belum' WHERE id = %s", (pemohon_id,))
                     conn.commit()
-
-                    send_whatsapp_and_log(cursor, pemohon_id, nama, nomor_hp, nama_izin, tahapan, no_permohonan, token, user_id)
-                    send_wa_to_matching_pegawai_if_needed(conn, cursor, user, tahapan, no_permohonan, pemohon_id)
+                    print(f"Tahapan berubah: ID {ext_id} {old_tahapan} → {tahapan} {pemohon_id}")
+                    send_whatsapp_and_log(cursor, pemohon_id, nama, nomor_hp, nama_izin, tahapan, no_permohonan, token, user_id, username)
+                    send_wa_to_matching_pegawai_if_needed(conn, cursor, user, tahapan, no_permohonan, pemohon_id, nama_izin, created_at, username)
 
                     cursor.execute("""
                         UPDATE pemohons
@@ -184,7 +206,7 @@ def process_user(conn, user, cursor):
                 cursor.execute("SELECT kirim_pegawai, status FROM pemohons WHERE id = %s", (pemohon_id,))
                 row = cursor.fetchone()
                 if row and row['kirim_pegawai'].lower() == 'belum' and row['status'].lower() == 'proses':
-                    send_wa_to_matching_pegawai_if_needed(conn, cursor, user, tahapan, no_permohonan, pemohon_id)
+                    send_wa_to_matching_pegawai_if_needed(conn, cursor, user, tahapan, no_permohonan, pemohon_id, nama_izin, created_at, username)
 
     except Exception as e:
         print(f"Error saat proses user ID {user.get('id')}: {e}")

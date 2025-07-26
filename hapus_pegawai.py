@@ -14,7 +14,7 @@ def delete_old_notif_pegawais():
         conn = mysql.connector.connect(**DB_CONFIG)
         cursor = conn.cursor()
 
-        batas_waktu = (datetime.now() - timedelta(days=3)).strftime('%Y-%m-%d %H:%M:%S')
+        batas_waktu = (datetime.now() - timedelta(days=0)).strftime('%Y-%m-%d %H:%M:%S')
         query = "DELETE FROM notif_pegawais WHERE created_at < %s"
 
         cursor.execute(query, (batas_waktu,))

@@ -14,7 +14,7 @@ def delete_old_pesans():
         conn = mysql.connector.connect(**DB_CONFIG)
         cursor = conn.cursor()
 
-        batas_waktu = datetime.now() - timedelta(days=3)
+        batas_waktu = datetime.now() - timedelta(days=0)
 
         cursor.execute("""
             DELETE FROM pesans 

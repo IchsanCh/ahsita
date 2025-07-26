@@ -14,7 +14,7 @@ def delete_old_pemohon():
         conn = mysql.connector.connect(**DB_CONFIG)
         cursor = conn.cursor()
 
-        batas_waktu = datetime.now() - timedelta(days=4)
+        batas_waktu = datetime.now() - timedelta(days=0)
 
         cursor.execute("""
             DELETE FROM pemohons 
