@@ -46,7 +46,7 @@ Pesan ini dikirim secara otomatis oleh Sitaku | sitaku.lotusaja.com
             "target": nomor_hp,
             "message": message,
             "countryCode": "62"
-        }, headers={"Authorization": token}, timeout=10)
+        }, headers={"Authorization": token}, timeout=30)
 
         response_json = res.json()
         print(f"WA ke {nomor_hp}: {res.text}")
@@ -106,7 +106,7 @@ Pesan ini dikirim secara otomatis oleh Sitaku | sitaku.lotusaja.com
             INSERT INTO notif_pegawais (user_id, nomor_hp, nama, posisi, pesan, created_at, updated_at)
             VALUES (%s, %s, %s, %s, %s, NOW(), NOW())
         """, (user['id'], nomor_hp, nama, pegawai.get("posisi"), message))
-    cursor.execute("UPDATE pemohons SET kirim_pegawai = 'sudah', updated_at = NOW() WHERE id = %s", (pemohon_id,))
+    cursor.execute("UPDATE pemohons SET kirim_pegawai = 'sudah', updated_at = NOW() WHERE id = %s and user_id = %s", (pemohon_id, user['id']))
     conn.commit()
     print(f"Update kirim_pegawai jadi 'sudah' untuk pemohon ID {pemohon_id}")
 
@@ -121,7 +121,7 @@ def process_user(conn, user, cursor):
         return
 
     try:
-        res = requests.get(api_url, timeout=15)
+        res = requests.get(api_url, timeout=30)
         res.raise_for_status()
 
         # Ambil respons JSON dan dukung kedua format v1 dan v2
@@ -154,7 +154,7 @@ def process_user(conn, user, cursor):
                     created_at = None
             hash_val = compute_hash(item)
 
-            cursor.execute("SELECT id, tahapan, payload_hash, last_notified_tahapan, nomor_hp FROM pemohons WHERE external_id = %s", (ext_id,))
+            cursor.execute("SELECT id, tahapan, payload_hash, last_notified_tahapan, nomor_hp FROM pemohons WHERE external_id = %s AND user_id = %s", (ext_id, user_id))
             result = cursor.fetchone()
 
             if result is None:
@@ -176,9 +176,9 @@ def process_user(conn, user, cursor):
                 last_notified = result['last_notified_tahapan']
 
                 if tahapan != last_notified or nomor_hp != result.get('nomor_hp'):
-                    cursor.execute("UPDATE pemohons SET kirim_pegawai = 'belum' WHERE id = %s", (pemohon_id,))
+                    cursor.execute("UPDATE pemohons SET kirim_pegawai = 'belum' WHERE id = %s and user_id=%s", (pemohon_id, user_id))
                     conn.commit()
-                    print(f"Tahapan berubah: ID {ext_id} {old_tahapan} → {tahapan} {pemohon_id}")
+                    print(f"Tahapan berubah: ID {pemohon_id} {old_tahapan} → {tahapan} {pemohon_id}")
                     send_whatsapp_and_log(cursor, pemohon_id, nama, nomor_hp, nama_izin, tahapan, no_permohonan, token, user_id, username)
                     send_wa_to_matching_pegawai_if_needed(conn, cursor, user, tahapan, no_permohonan, pemohon_id, nama_izin, created_at, username)
 
@@ -188,22 +188,22 @@ def process_user(conn, user, cursor):
                             tahapan=%s, status=%s, payload_hash=%s,
                             tgl_pengajuan=%s, last_notified_tahapan=%s,
                             notified_at=%s
-                        WHERE external_id=%s
+                        WHERE external_id=%s and user_id=%s
                     """, (nama, nomor_hp, no_permohonan, nama_izin, tahapan, status,
-                          hash_val, created_at, tahapan, datetime.now(), ext_id))
+                          hash_val, created_at, tahapan, datetime.now(), ext_id, user_id))
                 else:
-                    print(f"Data update tanpa WA: ID {ext_id}")
+                    print(f"Data update tanpa WA: ID {pemohon_id}")
                     cursor.execute("""
                         UPDATE pemohons 
                         SET nama=%s, nomor_hp=%s, no_permohonan=%s, nama_izin=%s,
                             tahapan=%s, status=%s, payload_hash=%s, tgl_pengajuan=%s
-                        WHERE external_id=%s
-                    """, (nama, nomor_hp, no_permohonan, nama_izin, tahapan, status, hash_val, created_at, ext_id))
+                        WHERE external_id=%s and user_id=%s
+                    """, (nama, nomor_hp, no_permohonan, nama_izin, tahapan, status, hash_val, created_at, ext_id, user_id))
 
             else:
-                print(f"Skip (data sama): ID {ext_id}")
                 pemohon_id = result['id']
-                cursor.execute("SELECT kirim_pegawai, status FROM pemohons WHERE id = %s", (pemohon_id,))
+                print(f"Skip (data sama): ID {pemohon_id}")
+                cursor.execute("SELECT kirim_pegawai, status FROM pemohons WHERE id = %s AND user_id = %s", (pemohon_id, user_id))
                 row = cursor.fetchone()
                 if row and row['kirim_pegawai'].lower() == 'belum' and row['status'].lower() == 'proses':
                     send_wa_to_matching_pegawai_if_needed(conn, cursor, user, tahapan, no_permohonan, pemohon_id, nama_izin, created_at, username)
@@ -216,7 +216,7 @@ def main():
         conn = mysql.connector.connect(**DB_CONFIG)
         cursor = conn.cursor(dictionary=True)
         headers = {"Authorization": API_TOKEN}
-        response = requests.get(USER_API, headers=headers, timeout=15)
+        response = requests.get(USER_API, headers=headers, timeout=30)
         response.raise_for_status()
         users = response.json().get("data", [])
 
