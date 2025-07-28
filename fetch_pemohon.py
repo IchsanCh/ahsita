@@ -5,7 +5,7 @@ import json
 import time
 from datetime import datetime
 
-# --- DATABASE CONFIG ---
+# --- DATABASE CONFIGS ---
 DB_CONFIG = {
     'host': 'localhost',
     'user': 'root',
