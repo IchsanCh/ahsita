@@ -148,7 +148,7 @@ def process_user(conn, user, cursor):
             if created_at_raw:
                 try:
                     dt_obj = datetime.fromisoformat(created_at_raw)
-                    created_at = dt_obj.strftime("%Y-%m-%d %H:%M:%S")  # aman buat MySQL datetime
+                    created_at = dt_obj.strftime("%Y-%m-%d %H:%M:%S")  
                 except Exception as e:
                     print(f"Gagal parsing tgl_pengajuan: {e}")
                     created_at = None
